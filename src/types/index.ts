@@ -5,6 +5,10 @@ export interface DocumentFile {
   status: 'pending' | 'uploading' | 'uploaded' | 'processing' | 'analyzed' | 'error';
   progress?: number;
   preview?: string;
+  // Analysis results
+  identifiedType?: DocumentType;
+  extractedData?: string;
+  analysisError?: string;
 }
 
 export type DocumentType = 
@@ -13,6 +17,22 @@ export type DocumentType =
   | 'balance-sheet'
   | 'bank-statement'
   | 'other';
+
+export interface DocumentAnalysis {
+  documentId: string;
+  documentName: string;
+  documentType: DocumentType;
+  identifiedType?: DocumentType;
+  extractedInfo: string;
+  pageCount?: number;
+  pageAnalyses?: Array<{
+    page: number;
+    analysis: string;
+    success: boolean;
+    error?: string;
+  }>;
+  error?: string;
+}
 
 export interface CreditRecommendation {
   score: number;
@@ -26,6 +46,12 @@ export interface CreditRecommendation {
     cashFlow: number;
     debtRatio: number;
     profitability: number;
+  };
+  documentAnalysis?: DocumentAnalysis[];
+  metadata?: {
+    totalDocuments: number;
+    documentTypes: string[];
+    analysisDate: string;
   };
 }
 

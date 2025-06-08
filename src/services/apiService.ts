@@ -1,6 +1,16 @@
 import axios, { AxiosResponse } from 'axios';
 import { DocumentFile, CreditRecommendation } from '../types';
 
+interface ProgressCallback {
+  (data: {
+    step: string;
+    progress: number;
+    message: string;
+    result?: CreditRecommendation;
+    error?: string;
+  }): void;
+}
+
 export class ApiService {
   private static backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
   
@@ -41,13 +51,16 @@ export class ApiService {
     }
   }
 
-  static async analyzeDocuments(documents: DocumentFile[]): Promise<CreditRecommendation> {
+  static async analyzeDocuments(
+    documents: DocumentFile[], 
+    progressCallback?: ProgressCallback
+  ): Promise<CreditRecommendation> {
     try {
       // First upload the documents
       const uploadedFiles = await this.uploadDocuments(documents);
       
       // Then start the analysis with Server-Sent Events
-      return await this.analyzeWithStreaming(uploadedFiles);
+      return await this.analyzeWithStreaming(uploadedFiles, progressCallback);
     } catch (error) {
       console.error('Error analyzing documents:', error);
       if (axios.isAxiosError(error)) {
@@ -57,7 +70,10 @@ export class ApiService {
     }
   }
 
-  private static async analyzeWithStreaming(uploadedFiles: any[]): Promise<CreditRecommendation> {
+  private static async analyzeWithStreaming(
+    uploadedFiles: any[], 
+    progressCallback?: ProgressCallback
+  ): Promise<CreditRecommendation> {
     return new Promise((resolve, reject) => {
       // Use fetch for Server-Sent Events as axios doesn't handle SSE well
       fetch(`${this.backendUrl}/api/analyze`, {
@@ -103,7 +119,12 @@ export class ApiService {
                     return;
                   }
                   
-                  // Handle progress updates if needed
+                  // Call progress callback if provided
+                  if (progressCallback) {
+                    progressCallback(data);
+                  }
+                  
+                  // Handle progress updates
                   console.log(`Progress: ${data.step} - ${data.progress}% - ${data.message}`);
                 } catch (e) {
                   console.warn('Failed to parse SSE data:', line);

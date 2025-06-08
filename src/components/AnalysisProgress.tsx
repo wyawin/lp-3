@@ -16,15 +16,15 @@ const analysisSteps: AnalysisStep[] = [
     status: 'pending'
   },
   {
-    id: 'financial-analysis',
-    title: 'Financial Analysis',
-    description: 'Evaluating financial health and cash flow',
+    id: 'document-identification',
+    title: 'Document Identification',
+    description: 'AI identifying document types and structure',
     status: 'pending'
   },
   {
-    id: 'risk-assessment',
-    title: 'Risk Assessment',
-    description: 'Identifying potential risk factors',
+    id: 'financial-analysis',
+    title: 'Financial Analysis',
+    description: 'Evaluating financial health and cash flow',
     status: 'pending'
   },
   {
@@ -41,6 +41,7 @@ export default function AnalysisProgress({ documents, onComplete }: AnalysisProg
   const [overallProgress, setOverallProgress] = useState(0);
   const [currentMessage, setCurrentMessage] = useState('Initializing analysis...');
   const [error, setError] = useState<string | null>(null);
+  const [processedDocuments, setProcessedDocuments] = useState<string[]>([]);
 
   useEffect(() => {
     const startAnalysis = async () => {
@@ -53,8 +54,39 @@ export default function AnalysisProgress({ documents, onComplete }: AnalysisProg
 
         setCurrentMessage('Starting document analysis...');
         
-        // Start the real analysis
-        const result = await ApiService.analyzeDocuments(documents);
+        // Start the real analysis with progress tracking
+        const result = await ApiService.analyzeDocuments(documents, (progressData) => {
+          // Update progress based on backend messages
+          setCurrentMessage(progressData.message || 'Processing...');
+          setOverallProgress(progressData.progress || 0);
+          
+          // Update steps based on progress
+          if (progressData.step === 'processing') {
+            updateStepStatus(0, 'processing');
+            if (progressData.progress >= 60) {
+              updateStepStatus(0, 'completed');
+              updateStepStatus(1, 'processing');
+            }
+          } else if (progressData.step === 'analysis') {
+            updateStepStatus(1, 'completed');
+            updateStepStatus(2, 'processing');
+            if (progressData.progress >= 95) {
+              updateStepStatus(2, 'completed');
+              updateStepStatus(3, 'processing');
+            }
+          } else if (progressData.step === 'complete') {
+            updateStepStatus(3, 'completed');
+          }
+          
+          // Track processed documents
+          if (progressData.message && progressData.message.includes('processing')) {
+            const docName = progressData.message.split('processing ')[1]?.split('...')[0];
+            if (docName && !processedDocuments.includes(docName)) {
+              setProcessedDocuments(prev => [...prev, docName]);
+            }
+          }
+        });
+        
         onComplete(result);
       } catch (error) {
         console.error('Analysis failed:', error);
@@ -68,15 +100,22 @@ export default function AnalysisProgress({ documents, onComplete }: AnalysisProg
       }
     };
 
+    const updateStepStatus = (stepIndex: number, status: AnalysisStep['status']) => {
+      setSteps(prev => prev.map((step, index) => 
+        index === stepIndex ? { ...step, status } : step
+      ));
+      setCurrentStepIndex(stepIndex);
+    };
+
     startAnalysis();
   }, [documents, onComplete]);
 
   const getStepIcon = (step: AnalysisStep) => {
     switch (step.id) {
       case 'document-processing': return FileText;
+      case 'document-identification': return Brain;
       case 'financial-analysis': return TrendingUp;
-      case 'risk-assessment': return Shield;
-      case 'credit-scoring': return Brain;
+      case 'credit-scoring': return Shield;
       default: return Clock;
     }
   };
@@ -204,6 +243,30 @@ export default function AnalysisProgress({ documents, onComplete }: AnalysisProg
           );
         })}
       </div>
+
+      {/* Document Processing Status */}
+      {processedDocuments.length > 0 && (
+        <div className="bg-blue-50 rounded-lg p-6 mb-6">
+          <h3 className="font-semibold text-blue-900 mb-3 flex items-center">
+            <FileText className="w-5 h-5 mr-2" />
+            Documents Being Processed
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {documents.map((doc, index) => (
+              <div key={doc.id} className="flex items-center space-x-2 text-sm">
+                <div className={`w-2 h-2 rounded-full ${
+                  processedDocuments.some(name => doc.file.name.includes(name)) 
+                    ? 'bg-green-500' 
+                    : index <= processedDocuments.length 
+                      ? 'bg-blue-500 animate-pulse' 
+                      : 'bg-gray-300'
+                }`} />
+                <span className="text-blue-700 truncate">{doc.file.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="bg-blue-50 rounded-lg p-6">
         <div className="flex items-center space-x-3">
